@@ -3,9 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!--
+    Content Security Policy do Renderer.
+
+    'none' por padrão e cada diretiva libera o mínimo. Note a ausência de
+    connect-src: o Renderer não faz requisição de rede alguma, porque o socket
+    SSH vive no processo principal.
+
+    'unsafe-inline' em style-src é necessário: o xterm.js cria dois elementos
+    <style> em tempo de execução (dimensões do terminal e tema), e elementos
+    <style> injetados por script são bloqueados pelo CSP sem essa permissão.
+    Como quem os cria é a biblioteca, não há como usar nonce. A exceção libera
+    CSS inline, não execução de código.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self';
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self';
+                 img-src 'self' data:">
+
   <title>SSH Terminal Clone</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+  <!-- Assets locais, não CDN: o app funciona offline e não baixa código
+       executável pela rede. -->
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 </head>
 <body>
   <div class="app-container">
@@ -83,9 +106,10 @@
     </div>
   </div>
 
-  <!-- Scripts do Xterm e FitAddon -->
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <!-- Scripts do Xterm e FitAddon, servidos do node_modules local.
+       Builds UMD: expõem os globais Terminal e FitAddon.FitAddon. -->
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
