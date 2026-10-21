@@ -5,6 +5,16 @@
  */
 const { contextBridge, ipcRenderer } = require('electron');
 
+/**
+ * Registra um listener e devolve a função de remoção, para evitar vazamento
+ * de handlers acumulados no ipcRenderer.
+ */
+function subscribe(channel, callback) {
+  const subscription = (event, payload) => callback(payload);
+  ipcRenderer.on(channel, subscription);
+  return () => ipcRenderer.removeListener(channel, subscription);
+}
+
 contextBridge.exposeInMainWorld('terminalAPI', {
   // Comandos enviados do Renderer para o Main
   connect: (config) => ipcRenderer.send('ssh:connect', config),
@@ -12,22 +22,16 @@ contextBridge.exposeInMainWorld('terminalAPI', {
   resize: (cols, rows) => ipcRenderer.send('ssh:resize', { cols, rows }),
   disconnect: () => ipcRenderer.send('ssh:disconnect'),
 
+  // Resposta do usuário ao prompt de chave de host desconhecida
+  respondHostKey: (accepted) => ipcRenderer.send('ssh:host-key-response', accepted),
+
+  // Remove uma identidade registrada (reinstalação legítima do servidor)
+  forgetHost: (host, port) => ipcRenderer.invoke('ssh:forget-host', { host, port }),
+
   // Listeners de eventos vindos do Main
-  onIncomingData: (callback) => {
-    const subscription = (event, data) => callback(data);
-    ipcRenderer.on('ssh:incoming-data', subscription);
-    return () => ipcRenderer.removeListener('ssh:incoming-data', subscription);
-  },
-
-  onStatusChange: (callback) => {
-    const subscription = (event, info) => callback(info);
-    ipcRenderer.on('ssh:status-change', subscription);
-    return () => ipcRenderer.removeListener('ssh:status-change', subscription);
-  },
-
-  onError: (callback) => {
-    const subscription = (event, err) => callback(err);
-    ipcRenderer.on('ssh:error', subscription);
-    return () => ipcRenderer.removeListener('ssh:error', subscription);
-  },
+  onIncomingData: (callback) => subscribe('ssh:incoming-data', callback),
+  onStatusChange: (callback) => subscribe('ssh:status-change', callback),
+  onError: (callback) => subscribe('ssh:error', callback),
+  onHostKeyPrompt: (callback) => subscribe('ssh:host-key-prompt', callback),
+  onHostKeyChanged: (callback) => subscribe('ssh:host-key-changed', callback),
 });

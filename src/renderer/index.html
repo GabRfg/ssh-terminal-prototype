@@ -48,6 +48,41 @@
     <main class="terminal-wrapper" id="terminalContainer"></main>
   </div>
 
+  <!-- Confirmação da identidade do host no primeiro contato (trust on first use) -->
+  <div class="modal-overlay hidden" id="hostKeyModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="hostKeyTitle">
+      <h2 class="modal-title" id="hostKeyTitle">Host desconhecido</h2>
+
+      <p class="modal-text">
+        A autenticidade de <strong id="hostKeyHost"></strong> não pode ser
+        estabelecida: esta é a primeira conexão a este servidor.
+      </p>
+
+      <dl class="fingerprint-box">
+        <dt>Algoritmo</dt>
+        <dd id="hostKeyType"></dd>
+        <dt>Impressão digital</dt>
+        <dd class="fingerprint" id="hostKeyFingerprint"></dd>
+      </dl>
+
+      <p class="modal-hint">
+        Confirme este valor por um canal em que você confie antes de aceitar.
+        No servidor, execute:<br>
+        <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code>
+      </p>
+
+      <p class="modal-text">
+        Nenhuma credencial foi enviada ainda. Ao aceitar, esta identidade fica
+        registrada e qualquer mudança futura será recusada automaticamente.
+      </p>
+
+      <div class="modal-actions">
+        <button id="btnRejectHostKey" class="btn danger">Cancelar conexão</button>
+        <button id="btnAcceptHostKey" class="btn primary">Aceitar e registrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts do Xterm e FitAddon -->
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>

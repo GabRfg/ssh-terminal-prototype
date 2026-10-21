@@ -1,8 +1,10 @@
 {
   "name": "ssh-terminal-prototype",
   "version": "1.0.0",
-  "description": "Protótipo funcional de terminal SSH em Electron com arquitetura modular IPC, ssh2 e xterm.js",
+  "description": "Protótipo funcional de terminal SSH em Electron com arquitetura modular IPC, verificação de identidade de host, ssh2 e xterm.js",
   "main": "src/main/main.js",
+  "license": "MIT",
+  "author": "Alfred Gabriel Ribeiro Fadel",
   "scripts": {
     "start": "electron ."
   },

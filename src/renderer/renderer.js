@@ -15,6 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('statusText');
   const terminalContainer = document.getElementById('terminalContainer');
 
+  // Diálogo de verificação da identidade do host
+  const hostKeyModal = document.getElementById('hostKeyModal');
+  const hostKeyHost = document.getElementById('hostKeyHost');
+  const hostKeyType = document.getElementById('hostKeyType');
+  const hostKeyFingerprint = document.getElementById('hostKeyFingerprint');
+  const btnAcceptHostKey = document.getElementById('btnAcceptHostKey');
+  const btnRejectHostKey = document.getElementById('btnRejectHostKey');
+
   // Inicialização do xterm.js
   const term = new Terminal({
     cursorBlink: true,
@@ -62,16 +70,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Estados que têm indicador visual próprio no CSS. Os demais reaproveitam
+  // o estado mais próximo para não deixar o indicador sem cor.
+  const INDICATOR_STATE = {
+    connected: 'connected',
+    connecting: 'connecting',
+    authenticated: 'connecting',
+    'hostkey-ok': 'connecting',
+    disconnected: 'disconnected',
+    closed: 'disconnected',
+    'hostkey-rejected': 'error',
+    error: 'error',
+  };
+
   // Atualizador de status visual
   function updateStatus(state, message) {
-    statusIndicator.className = 'status-indicator ' + state;
+    statusIndicator.className = 'status-indicator ' + (INDICATOR_STATE[state] || 'disconnected');
     statusText.textContent = message;
 
     if (state === 'connected') {
       btnConnect.disabled = true;
       btnDisconnect.disabled = false;
       term.focus();
-    } else if (state === 'disconnected' || state === 'error') {
+    } else if (state === 'disconnected' || state === 'error' || state === 'hostkey-rejected') {
       btnConnect.disabled = false;
       btnDisconnect.disabled = true;
     } else if (state === 'connecting') {
@@ -79,6 +100,42 @@ document.addEventListener('DOMContentLoaded', () => {
       btnDisconnect.disabled = false;
     }
   }
+
+  // Exibe o diálogo de confirmação e devolve a decisão ao processo principal.
+  function openHostKeyPrompt({ hostId, keyType, fingerprint }) {
+    hostKeyHost.textContent = hostId;
+    hostKeyType.textContent = keyType;
+    hostKeyFingerprint.textContent = fingerprint;
+    hostKeyModal.classList.remove('hidden');
+    btnRejectHostKey.focus();
+  }
+
+  function closeHostKeyPrompt(accepted) {
+    if (hostKeyModal.classList.contains('hidden')) {
+      return;
+    }
+
+    hostKeyModal.classList.add('hidden');
+    if (window.terminalAPI) {
+      window.terminalAPI.respondHostKey(accepted);
+    }
+  }
+
+  // Esconde o diálogo sem responder — para quando a conexão já foi encerrada
+  // por outro caminho e a decisão deixou de ser necessária.
+  function hideHostKeyPrompt() {
+    hostKeyModal.classList.add('hidden');
+  }
+
+  btnAcceptHostKey.addEventListener('click', () => closeHostKeyPrompt(true));
+  btnRejectHostKey.addEventListener('click', () => closeHostKeyPrompt(false));
+
+  // Escape fecha o diálogo recusando — o caminho seguro por padrão.
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeHostKeyPrompt(false);
+    }
+  });
 
   // Ações dos botões
   btnConnect.addEventListener('click', () => {
@@ -122,14 +179,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Mudança de status da conexão
     window.terminalAPI.onStatusChange((info) => {
+      updateStatus(info.status, info.message);
+
       if (info.status === 'connected') {
-        updateStatus('connected', info.message);
+        hideHostKeyPrompt();
         term.writeln(`\r\n\x1b[32m[${info.message}]\x1b[0m\r\n`);
       } else if (info.status === 'disconnected') {
-        updateStatus('disconnected', info.message);
+        hideHostKeyPrompt();
         term.writeln(`\r\n\x1b[31m[${info.message}]\x1b[0m\r\n`);
-      } else {
-        updateStatus(info.status, info.message);
+      } else if (info.status === 'hostkey-ok') {
+        term.writeln(`\x1b[36m[${info.message}]\x1b[0m`);
+      } else if (info.status === 'hostkey-rejected') {
+        term.writeln(`\r\n\x1b[33m[${info.message}]\x1b[0m\r\n`);
       }
     });
 
@@ -137,6 +198,25 @@ document.addEventListener('DOMContentLoaded', () => {
     window.terminalAPI.onError((err) => {
       updateStatus('error', `Erro (${err.stage}): ${err.error}`);
       term.writeln(`\r\n\x1b[1;31m[Erro SSH - ${err.stage}]: ${err.error}\x1b[0m\r\n`);
+    });
+
+    // 4. Host desconhecido: confirmação antes de enviar credenciais
+    window.terminalAPI.onHostKeyPrompt((info) => {
+      term.writeln(`\r\n\x1b[33m[Aguardando confirmação da identidade de ${info.hostId}]\x1b[0m`);
+      openHostKeyPrompt(info);
+    });
+
+    // 5. Chave de um host conhecido mudou: alerta explícito no terminal
+    window.terminalAPI.onHostKeyChanged((info) => {
+      term.writeln('\r\n\x1b[1;41;97m  ATENÇÃO: A IDENTIFICAÇÃO DO HOST REMOTO MUDOU  \x1b[0m');
+      term.writeln('\x1b[1;31mIsso pode indicar um ataque man-in-the-middle.\x1b[0m');
+      term.writeln(`\x1b[31mHost:      \x1b[0m${info.hostId}`);
+      term.writeln(`\x1b[31mEsperado:  \x1b[0m${info.expected}`);
+      term.writeln(`\x1b[31mRecebido:  \x1b[0m${info.received}`);
+      term.writeln(
+        '\x1b[33mSe a chave do servidor mudou por um motivo legítimo, remova a ' +
+          'identidade registrada antes de reconectar.\x1b[0m\r\n'
+      );
     });
   }
 });

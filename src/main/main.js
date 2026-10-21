@@ -5,9 +5,10 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { SshService } = require('./ssh-service');
+const { KnownHostsStore } = require('./known-hosts');
 
 let mainWindow = null;
-const sshService = new SshService();
+let sshService = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -28,9 +29,17 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   mainWindow.on('closed', () => {
-    sshService.disconnect();
+    if (sshService) {
+      sshService.disconnect();
+    }
     mainWindow = null;
   });
+}
+
+function sendToRenderer(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
 }
 
 // Configuração dos canais de comunicação IPC
@@ -55,27 +64,31 @@ function setupIpcBridge() {
     sshService.disconnect();
   });
 
+  // 5. Decisão do usuário sobre a chave de um host desconhecido
+  ipcMain.on('ssh:host-key-response', (event, accepted) => {
+    sshService.resolveHostKeyPrompt(accepted);
+  });
+
+  // 6. Remoção deliberada de uma identidade registrada
+  ipcMain.handle('ssh:forget-host', async (event, { host, port }) => {
+    return sshService.forgetHost(host, port);
+  });
+
   // Relé de eventos do SshService -> Renderer (via webContents)
-  sshService.on('data', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('ssh:incoming-data', data);
-    }
-  });
+  sshService.on('data', (data) => sendToRenderer('ssh:incoming-data', data));
+  sshService.on('status', (info) => sendToRenderer('ssh:status-change', info));
+  sshService.on('error', (err) => sendToRenderer('ssh:error', err));
 
-  sshService.on('status', (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('ssh:status-change', info);
-    }
-  });
-
-  sshService.on('error', (err) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('ssh:error', err);
-    }
-  });
+  // Verificação de host: pedido de confirmação e alerta de chave trocada
+  sshService.on('host-key-prompt', (info) => sendToRenderer('ssh:host-key-prompt', info));
+  sshService.on('host-key-changed', (info) => sendToRenderer('ssh:host-key-changed', info));
 }
 
 app.whenReady().then(() => {
+  // app.getPath('userData') só está disponível depois do app pronto.
+  const knownHostsPath = path.join(app.getPath('userData'), 'known-hosts.json');
+  sshService = new SshService(new KnownHostsStore(knownHostsPath));
+
   setupIpcBridge();
   createWindow();
 
@@ -85,7 +98,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  sshService.disconnect();
+  if (sshService) {
+    sshService.disconnect();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
