@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSH Terminal Clone</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Barra superior de conexão -->
+    <header class="toolbar">
+      <div class="connection-form">
+        <div class="input-group">
+          <label for="host">Host:</label>
+          <input type="text" id="host" placeholder="ex: 192.168.1.100 ou servidor.com" value="localhost">
+        </div>
+
+        <div class="input-group port">
+          <label for="port">Porta:</label>
+          <input type="number" id="port" value="22" min="1" max="65535">
+        </div>
+
+        <div class="input-group">
+          <label for="username">Usuário:</label>
+          <input type="text" id="username" placeholder="root ou deploy">
+        </div>
+
+        <div class="input-group">
+          <label for="password">Senha:</label>
+          <input type="password" id="password" placeholder="••••••••">
+        </div>
+
+        <div class="actions">
+          <button id="btnConnect" class="btn primary">Conectar</button>
+          <button id="btnDisconnect" class="btn danger" disabled>Desconectar</button>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <span class="status-indicator disconnected" id="statusIndicator"></span>
+        <span class="status-text" id="statusText">Pronto para conectar</span>
+      </div>
+    </header>
+
+    <!-- Área de renderização do terminal xterm.js -->
+    <main class="terminal-wrapper" id="terminalContainer"></main>
+  </div>
+
+  <!-- Scripts do Xterm e FitAddon -->
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
