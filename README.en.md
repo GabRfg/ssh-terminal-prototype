@@ -8,7 +8,7 @@ architecture standard to Electron-based terminals such as the VS Code terminal,
 Hyper and Tabby.
 
 > **Status:** study prototype, not production software.
-> See [Known limitations](#5-known-limitations) before pointing it at a server
+> See [Known limitations](#6-known-limitations) before pointing it at a server
 > you care about.
 
 ## Why I built it
@@ -184,7 +184,53 @@ nothing.
 
 ---
 
-## 4. Running it
+## 4. Renderer isolation and CSP
+
+Host verification guards against a fake server. This section covers the opposite
+direction: keeping untrusted code from running inside the window itself.
+
+The renderer has access to `window.terminalAPI.sendData()`. Arbitrary script
+running there cannot reach Node — `contextIsolation` prevents that — but it can
+reach the bridge, and therefore **type commands into the live SSH session**. The
+surface that matters here is not the filesystem, it is the user's terminal.
+
+Two measures close this off:
+
+**Local assets, not a CDN.** `xterm.js` and `FitAddon` are loaded from
+`node_modules` rather than a CDN. Fetching your own executable code over the
+network with no integrity check is the same class of problem host verification
+solves, just from the other side: a compromised CDN or an intercepted request
+injects JavaScript straight into the renderer. As a side effect the app works
+offline — which matters for an SSH client, since plenty of SSH-administered
+servers sit on restricted networks.
+
+**A restrictive Content Security Policy**, declared as a `<meta>` tag in
+`index.html`:
+
+```
+default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';
+font-src 'self'; img-src 'self' data:
+```
+
+`default-src 'none'` denies everything by default and each directive grants the
+minimum. The absence of `connect-src` is deliberate and follows directly from the
+architecture: the renderer makes no network requests at all, because the SSH
+socket lives in the main process.
+
+The one loose grant is `'unsafe-inline'` in `style-src`, and it is required:
+`xterm.js` creates two `<style>` elements at runtime, one for terminal dimensions
+and one for the theme. Script-injected `<style>` elements are blocked by CSP
+without that grant, and since the library creates them there is no way to use a
+nonce. The exception permits inline CSS, not code execution — far less serious
+than the equivalent in `script-src`.
+
+> Electron logs a console warning when the renderer has no CSP. The warning notes
+> that it stops appearing once the app is packaged, which is true — but it is only
+> the warning that goes away, not the risk.
+
+---
+
+## 5. Running it
 
 Requires Node.js 18+.
 
@@ -199,9 +245,30 @@ Fill in host, port, username and password, then click **Connect**. On the first
 connection to a server, confirm the fingerprint in the dialog. Test against a
 local container or a VM you own.
 
+### If `npm start` fails with "Electron failed to install correctly"
+
+From npm 11.20 on, install scripts are blocked by default and need per-package
+approval. The `electron` npm package is only a stub — the real binary is fetched
+by a `postinstall`. With that script blocked, `npm install` **succeeds**
+(`exit 0`, `info ok`) without downloading anything, and the failure surfaces only
+at `npm start`.
+
+```bash
+npm install-scripts approve electron
+rm -rf node_modules/electron        # Windows: Remove-Item -Recurse -Force node_modules\electron
+npm install
+```
+
+Removing the folder is necessary: approving does not re-run the script for an
+already-installed package, because npm considers the tree satisfied and does
+nothing.
+
+The other two blocked scripts, from `ssh2` and `cpu-features`, can stay blocked.
+They exist to compile `cpu-features`, which is optional.
+
 ---
 
-## 5. Known limitations
+## 6. Known limitations
 
 Documented deliberately — this is a prototype, and these are the gaps between it
 and a real client:
@@ -210,16 +277,16 @@ and a real client:
   is not wired through to `ssh2` yet.
 - **Credentials stay in memory** for the lifetime of the connection and are not
   zeroed after authentication.
-- **`sandbox: false`** on the `BrowserWindow`. `contextIsolation` and
-  `nodeIntegration: false` already isolate the renderer, but enabling Chromium's
-  sandbox would be stricter.
+- **`cpu-features` is not compiled.** It is an optional native dependency of
+  `ssh2` and needs `node-gyp`. `ssh2` works without it, falling back to its pure
+  JavaScript path.
 - **No session persistence**, saved profiles, tabs, SFTP or port forwarding.
 - **No automated test suite in the repository.** The host verification logic was
   exercised manually across all three outcomes, but nothing is committed.
 
 ---
 
-## 6. Things I learned
+## 7. Things I learned
 
 **PTY allocation is not optional.** Without `client.shell({ term: 'xterm-256color' })`
 you get a stream, but no job control, no line editing and no colours — full-screen
@@ -242,7 +309,7 @@ reason an encrypted session is also a session with the right machine.
 
 ---
 
-## 7. Built with
+## 8. Built with
 
 [Electron](https://www.electronjs.org/) ·
 [ssh2](https://github.com/mscdex/ssh2) ·

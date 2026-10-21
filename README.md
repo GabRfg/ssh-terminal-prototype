@@ -8,7 +8,7 @@ arquitetura desacoplada padrão de clientes de terminal baseados em Electron
 (como VS Code Terminal, Hyper e Tabby).
 
 > **Status:** protótipo de estudo, não software de produção.
-> Veja [Limitações conhecidas](#5-limitações-conhecidas) antes de usar contra
+> Veja [Limitações conhecidas](#6-limitações-conhecidas) antes de usar contra
 > qualquer servidor que importe.
 
 ## Intuito
@@ -199,7 +199,52 @@ deixando de existir. Por isso o callback usa corpo em bloco e não retorna nada.
 
 ---
 
-## 4. Como Executar
+## 4. Isolamento do Renderer e CSP
+
+A verificação de host protege contra um servidor falso. Esta seção trata do lado
+oposto: impedir que código não confiável execute dentro da própria janela.
+
+O Renderer tem acesso a `window.terminalAPI.sendData()`. Script arbitrário
+executando ali não alcança o Node — o `contextIsolation` impede isso — mas
+alcança a ponte, e portanto consegue **digitar comandos na sessão SSH ativa**.
+A superfície relevante não é o sistema de arquivos, é o terminal do usuário.
+
+Duas medidas fecham isso:
+
+**Assets locais, não CDN.** O `xterm.js` e o `FitAddon` são carregados do
+`node_modules`, não de um CDN. Baixar o próprio código executável pela rede, sem
+verificação de integridade, é a mesma classe de problema que a verificação de
+host resolve, só do outro lado: um CDN comprometido ou uma requisição
+interceptada injetam JavaScript direto no Renderer. Como efeito colateral, o app
+passa a funcionar offline — relevante para um cliente SSH, já que muitos
+servidores administrados por SSH estão em redes restritas.
+
+**Content Security Policy restritiva**, declarada em `<meta>` no `index.html`:
+
+```
+default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';
+font-src 'self'; img-src 'self' data:
+```
+
+`default-src 'none'` nega tudo por padrão e cada diretiva libera o mínimo.
+A ausência de `connect-src` é intencional e é uma consequência direta da
+arquitetura: o Renderer não faz requisição de rede alguma, porque o socket SSH
+vive no processo principal.
+
+A única permissão frouxa é `'unsafe-inline'` em `style-src`, e é necessária: o
+`xterm.js` cria dois elementos `<style>` em tempo de execução, um para as
+dimensões do terminal e outro para o tema. Elementos `<style>` injetados por
+script são bloqueados pelo CSP sem essa permissão, e como quem os cria é a
+biblioteca, não há como usar nonce. A exceção libera CSS inline, não execução de
+código — bem menos grave que o equivalente em `script-src`.
+
+> O Electron emite um aviso no console quando o Renderer não tem CSP. O aviso
+> informa que não aparece mais no app empacotado, o que é verdade — mas é só o
+> aviso que desaparece, não o risco.
+
+---
+
+## 5. Como Executar
 
 Requer Node.js 18 ou superior.
 
@@ -213,9 +258,29 @@ Preencha host, porta, usuário e senha e clique em **Conectar**. Na primeira
 conexão a um servidor, confirme a impressão digital no diálogo. Teste contra um
 container local ou uma VM sua.
 
+### Se o `npm start` falhar com "Electron failed to install correctly"
+
+A partir do npm 11.20, scripts de instalação ficam bloqueados por padrão e
+exigem aprovação por pacote. O pacote `electron` no npm é só um stub: o binário
+de verdade é baixado por um `postinstall`. Com o script bloqueado, o
+`npm install` **termina com sucesso** (`exit 0`, `info ok`) sem baixar nada, e a
+falha só aparece no `npm start`.
+
+```bash
+npm install-scripts approve electron
+rm -rf node_modules/electron        # Windows: Remove-Item -Recurse -Force node_modules\electron
+npm install
+```
+
+A remoção da pasta é necessária: aprovar não reexecuta o script de um pacote já
+instalado, porque o npm considera a árvore satisfeita e não refaz nada.
+
+Os outros dois scripts bloqueados, de `ssh2` e `cpu-features`, podem continuar
+bloqueados. Servem para compilar o `cpu-features`, que é opcional.
+
 ---
 
-## 5. Limitações conhecidas
+## 6. Limitações conhecidas
 
 Documentadas de propósito — este é um protótipo, e abaixo está a distância entre
 ele e um cliente real:
@@ -224,16 +289,16 @@ ele e um cliente real:
   a opção `passphrase` ao `ssh2`.
 - **Credenciais permanecem em memória** durante a conexão e não são zeradas após
   a autenticação.
-- **`sandbox: false`** no `BrowserWindow`. O `contextIsolation` e o
-  `nodeIntegration: false` já isolam o Renderer, mas ativar o sandbox do Chromium
-  seria mais restritivo.
+- **`cpu-features` não compilado.** É dependência nativa opcional do `ssh2` e
+  exige `node-gyp`. O `ssh2` funciona sem ela, usando o caminho em JavaScript
+  puro.
 - **Sem persistência de sessões**, perfis salvos, abas, SFTP ou port forwarding.
 - **Sem testes automatizados no repositório.** A lógica de verificação de host foi
   exercitada manualmente nos três desfechos, mas não há suíte versionada.
 
 ---
 
-## 6. Construído com
+## 7. Construído com
 
 [Electron](https://www.electronjs.org/) ·
 [ssh2](https://github.com/mscdex/ssh2) ·

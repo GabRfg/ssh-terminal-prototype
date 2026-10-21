@@ -22,7 +22,10 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // Sandbox do Chromium ativo. O preload continua funcionando porque
+      // contextBridge e ipcRenderer estão disponíveis em preload sandboxed —
+      // o que não vale para módulos Node em geral.
+      sandbox: true,
     },
   });
 
