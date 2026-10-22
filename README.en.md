@@ -8,7 +8,7 @@ architecture standard to Electron-based terminals such as the VS Code terminal,
 Hyper and Tabby.
 
 > **Status:** study prototype, not production software.
-> See [Known limitations](#6-known-limitations) before pointing it at a server
+> See [Known limitations](#7-known-limitations) before pointing it at a server
 > you care about.
 
 ## Why I built it
@@ -102,8 +102,9 @@ sequenceDiagram
 | `src/main/main.js` | Electron lifecycle, `ipcMain` handlers, forwards `SshService` events to the window |
 | `src/main/ssh-service.js` | `EventEmitter` wrapper over `ssh2`: host verification, connect, authenticate, allocate PTY, resize, teardown |
 | `src/main/known-hosts.js` | OpenSSH-format fingerprinting and persistence of accepted host identities. Electron-free by design, so it is testable outside the app |
+| `src/main/settings-store.js` | Terminal preferences: defaults, preset palettes, validation and persistence; also translates them into `xterm.js` options |
 | `src/preload/preload.js` | The security boundary — exposes only `window.terminalAPI` via `contextBridge` |
-| `src/renderer/index.html` | Connection form, terminal container, host key confirmation dialog |
+| `src/renderer/index.html` | Connection form, tabs, terminal container, preferences panel, host key confirmation dialog |
 | `src/renderer/renderer.js` | xterm.js setup, `FitAddon`, input capture, status handling |
 | `src/renderer/style.css` | Dark terminal styling |
 
@@ -230,7 +231,52 @@ than the equivalent in `script-src`.
 
 ---
 
-## 5. Running it
+## 5. Preferences panel
+
+The **Options** tab customizes the terminal's appearance and behaviour: colour
+palette (six presets, plus all 21 colours editable individually), font family,
+size, weight, line height and letter spacing, cursor style and blink, and
+behaviours such as scrollback, tab width and minimum contrast.
+
+Changes apply live, to both the main terminal and a preview, and persist to
+`settings.json` in the app's data directory.
+
+### Validation at the boundary
+
+Preferences leave the UI, go to disk, and come back feeding `xterm.js` options
+directly. That makes them untrusted input along two paths: the file can be
+hand-edited or corrupted, and an invalid value reaching `xterm.js` breaks
+rendering.
+
+So all validation lives in the main process, in `sanitize()`, not in the
+renderer. Numbers are range-checked, enums checked against known lists, colours
+against hexadecimal, and the font family against a restricted character set — it
+ends up inside CSS, so `monospace; } body { display:none } .x {` cannot get
+through. Anything unrecognised falls back to the default instead of propagating.
+
+`save` returns the already-normalised version, and the UI adopts what came back
+rather than what it sent. Typing 999999999 into scrollback makes the field show
+1000.
+
+### Two xterm.js details that shaped the code
+
+**The `theme` object is replaced, not merged.** Sending a partial theme wipes the
+colours left out, so `sanitize()` always completes all 21 keys from the base
+palette before handing it over.
+
+**Changing the font does not resize by itself.** Altering size, line height or
+letter spacing changes how many columns and rows fit, but `fit()` has to be
+called — and the remote PTY has to be told via `resize()`, or full-screen
+programs keep drawing at the old dimensions. It is the same lesson as window
+resizing, arriving by a different route.
+
+The preview is created the first time the tab is opened, and the main terminal
+only refits when you return to its tab: `xterm.js` measures incorrectly inside a
+hidden container.
+
+---
+
+## 6. Running it
 
 Requires Node.js 18+.
 
@@ -239,6 +285,10 @@ git clone https://github.com/GabRfg/ssh-terminal-prototype
 cd ssh-terminal-prototype
 npm install
 npm start
+```
+
+```bash
+npm test     # host verification and preference validation
 ```
 
 Fill in host, port, username and password, then click **Connect**. On the first
@@ -268,7 +318,7 @@ They exist to compile `cpu-features`, which is optional.
 
 ---
 
-## 6. Known limitations
+## 7. Known limitations
 
 Documented deliberately — this is a prototype, and these are the gaps between it
 and a real client:
@@ -281,12 +331,12 @@ and a real client:
   `ssh2` and needs `node-gyp`. `ssh2` works without it, falling back to its pure
   JavaScript path.
 - **No session persistence**, saved profiles, tabs, SFTP or port forwarding.
-- **No automated test suite in the repository.** The host verification logic was
-  exercised manually across all three outcomes, but nothing is committed.
+- **Partial test coverage.** `npm test` covers host identity verification and
+  preference validation, both in plain Node. The UI is verified by hand.
 
 ---
 
-## 7. Things I learned
+## 8. Things I learned
 
 **PTY allocation is not optional.** Without `client.shell({ term: 'xterm-256color' })`
 you get a stream, but no job control, no line editing and no colours — full-screen
@@ -309,7 +359,7 @@ reason an encrypted session is also a session with the right machine.
 
 ---
 
-## 8. Built with
+## 9. Built with
 
 [Electron](https://www.electronjs.org/) ·
 [ssh2](https://github.com/mscdex/ssh2) ·

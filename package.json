@@ -6,7 +6,8 @@
   "license": "MIT",
   "author": "Alfred Gabriel Ribeiro Fadel",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node test/known-hosts.test.js && node test/settings-store.test.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",

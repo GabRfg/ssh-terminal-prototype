@@ -28,6 +28,13 @@ contextBridge.exposeInMainWorld('terminalAPI', {
   // Remove uma identidade registrada (reinstalação legítima do servidor)
   forgetHost: (host, port) => ipcRenderer.invoke('ssh:forget-host', { host, port }),
 
+  // Preferências do terminal. Cada chamada devolve { settings, xterm } — as
+  // preferências normalizadas pelo processo principal e as opções já no
+  // formato do xterm.js.
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
+  resetSettings: () => ipcRenderer.invoke('settings:reset'),
+
   // Listeners de eventos vindos do Main
   onIncomingData: (callback) => subscribe('ssh:incoming-data', callback),
   onStatusChange: (callback) => subscribe('ssh:status-change', callback),

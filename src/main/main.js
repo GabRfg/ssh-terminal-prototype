@@ -6,9 +6,11 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { SshService } = require('./ssh-service');
 const { KnownHostsStore } = require('./known-hosts');
+const { SettingsStore, toXtermOptions, THEME_PRESETS } = require('./settings-store');
 
 let mainWindow = null;
 let sshService = null;
+let settingsStore = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -77,6 +79,25 @@ function setupIpcBridge() {
     return sshService.forgetHost(host, port);
   });
 
+  // 7. Preferências de aparência e comportamento do terminal.
+  //    Cada resposta devolve tanto as preferências normalizadas quanto as
+  //    opções já traduzidas para o xterm.js, para que o Renderer não precise
+  //    conhecer o formato da biblioteca.
+  ipcMain.handle('settings:get', async () => {
+    const settings = await settingsStore.load();
+    return { settings, xterm: toXtermOptions(settings), presets: THEME_PRESETS };
+  });
+
+  ipcMain.handle('settings:save', async (event, incoming) => {
+    const settings = await settingsStore.save(incoming);
+    return { settings, xterm: toXtermOptions(settings) };
+  });
+
+  ipcMain.handle('settings:reset', async () => {
+    const settings = await settingsStore.reset();
+    return { settings, xterm: toXtermOptions(settings) };
+  });
+
   // Relé de eventos do SshService -> Renderer (via webContents)
   sshService.on('data', (data) => sendToRenderer('ssh:incoming-data', data));
   sshService.on('status', (info) => sendToRenderer('ssh:status-change', info));
@@ -89,8 +110,9 @@ function setupIpcBridge() {
 
 app.whenReady().then(() => {
   // app.getPath('userData') só está disponível depois do app pronto.
-  const knownHostsPath = path.join(app.getPath('userData'), 'known-hosts.json');
-  sshService = new SshService(new KnownHostsStore(knownHostsPath));
+  const userData = app.getPath('userData');
+  sshService = new SshService(new KnownHostsStore(path.join(userData, 'known-hosts.json')));
+  settingsStore = new SettingsStore(path.join(userData, 'settings.json'));
 
   setupIpcBridge();
   createWindow();

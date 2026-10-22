@@ -8,7 +8,7 @@ arquitetura desacoplada padrão de clientes de terminal baseados em Electron
 (como VS Code Terminal, Hyper e Tabby).
 
 > **Status:** protótipo de estudo, não software de produção.
-> Veja [Limitações conhecidas](#6-limitações-conhecidas) antes de usar contra
+> Veja [Limitações conhecidas](#7-limitações-conhecidas) antes de usar contra
 > qualquer servidor que importe.
 
 ## Intuito
@@ -111,14 +111,21 @@ sequenceDiagram
   - Sem dependência do Electron de propósito: recebe o caminho do arquivo por
     parâmetro, o que o torna testável fora do app.
 
+- **`src/main/settings-store.js`**:
+  - Preferências de aparência e comportamento do terminal: padrões, paletas
+    prontas, validação e persistência.
+  - Traduz as preferências para o formato de opções do `xterm.js`, para que o
+    Renderer não precise conhecer o formato da biblioteca.
+
 - **`src/preload/preload.js`**:
   - Barreira de segurança isolando o Renderer do Node.js (`contextIsolation: true`,
     `nodeIntegration: false`).
   - Expõe a API controlada `window.terminalAPI` através de `contextBridge`.
 
 - **`src/renderer/`**:
-  - `index.html`: Layout da interface, inputs de conexão, container do terminal
-    e diálogo de confirmação da identidade do host.
+  - `index.html`: Layout da interface, inputs de conexão, abas, container do
+    terminal, painel de preferências e diálogo de confirmação da identidade do
+    host.
   - `renderer.js`: Gerenciamento do `xterm.js`, `FitAddon`, captura de entrada e
     renderização de saída.
   - `style.css`: Estilização escura de alta fidelidade para terminal.
@@ -244,7 +251,52 @@ código — bem menos grave que o equivalente em `script-src`.
 
 ---
 
-## 5. Como Executar
+## 5. Painel de preferências
+
+A aba **Options** permite customizar a aparência e o comportamento do terminal:
+paleta de cores (seis prontas, mais as 21 cores editáveis uma a uma), família,
+tamanho, peso, altura de linha e espaçamento da fonte, estilo e piscar do cursor,
+e comportamentos como histórico, largura do tab e contraste mínimo.
+
+As mudanças são aplicadas ao vivo, no terminal principal e numa
+pré-visualização, e persistem em `settings.json` no diretório de dados do app.
+
+### Validação na fronteira
+
+As preferências saem da interface, vão para o disco e voltam alimentando
+diretamente as opções do `xterm.js`. São, portanto, entrada não confiável por
+dois caminhos: o arquivo pode ser editado à mão ou corromper, e um valor
+inválido chegando ao `xterm.js` quebra a renderização.
+
+Por isso toda a validação vive no processo principal, em `sanitize()`, e não no
+Renderer. Números são checados por faixa, enumerações contra listas conhecidas,
+cores contra hexadecimal, e a família da fonte contra um conjunto restrito de
+caracteres — ela termina dentro de CSS, então `monospace; } body { display:none
+} .x {` não pode passar. O que não é reconhecido volta ao padrão em vez de
+propagar.
+
+O `save` devolve a versão já normalizada, e a interface adota o que voltou em
+vez do que enviou. Digitar 999999999 no histórico faz o campo mostrar 1000.
+
+### Dois detalhes do xterm.js que moldaram o código
+
+**O objeto `theme` é substituído, não mesclado.** Enviar um tema parcial apaga
+as cores que ficaram de fora, então `sanitize()` sempre completa as 21 chaves a
+partir da paleta base antes de entregar.
+
+**Mudar a fonte não redimensiona sozinho.** Alterar tamanho, altura de linha ou
+espaçamento muda quantas colunas e linhas cabem, mas o `fit()` precisa ser
+chamado — e o PTY remoto precisa ser avisado com `resize()`, ou programas de
+tela cheia continuam desenhando nas dimensões antigas. É a mesma lição do
+redimensionamento de janela, por outro caminho.
+
+A pré-visualização é criada na primeira vez que a aba é aberta, e o terminal
+principal só refaz o `fit` ao voltar para a aba dele: o `xterm.js` mede errado
+dentro de um container oculto.
+
+---
+
+## 6. Como Executar
 
 Requer Node.js 18 ou superior.
 
@@ -252,6 +304,10 @@ Requer Node.js 18 ou superior.
 cd ssh-terminal-prototype
 npm install
 npm start
+```
+
+```bash
+npm test     # verificação de host e validação de preferências
 ```
 
 Preencha host, porta, usuário e senha e clique em **Conectar**. Na primeira
@@ -280,7 +336,7 @@ bloqueados. Servem para compilar o `cpu-features`, que é opcional.
 
 ---
 
-## 6. Limitações conhecidas
+## 7. Limitações conhecidas
 
 Documentadas de propósito — este é um protótipo, e abaixo está a distância entre
 ele e um cliente real:
@@ -293,12 +349,13 @@ ele e um cliente real:
   exige `node-gyp`. O `ssh2` funciona sem ela, usando o caminho em JavaScript
   puro.
 - **Sem persistência de sessões**, perfis salvos, abas, SFTP ou port forwarding.
-- **Sem testes automatizados no repositório.** A lógica de verificação de host foi
-  exercitada manualmente nos três desfechos, mas não há suíte versionada.
+- **Cobertura de testes parcial.** `npm test` cobre a verificação de identidade
+  de host e a validação de preferências, ambos em Node puro. A interface é
+  verificada manualmente.
 
 ---
 
-## 7. Construído com
+## 8. Construído com
 
 [Electron](https://www.electronjs.org/) ·
 [ssh2](https://github.com/mscdex/ssh2) ·

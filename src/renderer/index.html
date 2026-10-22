@@ -67,8 +67,163 @@
       </div>
     </header>
 
-    <!-- Área de renderização do terminal xterm.js -->
-    <main class="terminal-wrapper" id="terminalContainer"></main>
+    <!-- Abas: sessão de terminal e preferências -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" id="tabTerminal" role="tab" aria-selected="true"
+              aria-controls="panelTerminal">Terminal</button>
+      <button class="tab" id="tabOptions" role="tab" aria-selected="false"
+              aria-controls="panelOptions">Options</button>
+    </nav>
+
+    <!-- Painel 1: renderização do terminal xterm.js -->
+    <main class="panel" id="panelTerminal" role="tabpanel" aria-labelledby="tabTerminal">
+      <div class="terminal-wrapper" id="terminalContainer"></div>
+    </main>
+
+    <!-- Painel 2: preferências -->
+    <main class="panel hidden" id="panelOptions" role="tabpanel" aria-labelledby="tabOptions">
+      <div class="options">
+
+        <section class="opt-section">
+          <h2 class="opt-title">Pré-visualização</h2>
+          <div class="preview-wrapper" id="previewContainer"></div>
+          <p class="opt-note">
+            As mudanças são aplicadas e salvas na hora, inclusive na sessão ativa.
+          </p>
+        </section>
+
+        <section class="opt-section">
+          <h2 class="opt-title">Tema</h2>
+          <div class="swatch-grid" id="presetGrid"></div>
+
+          <details class="opt-details">
+            <summary>Cores individuais</summary>
+            <div class="color-grid" id="colorGrid"></div>
+          </details>
+        </section>
+
+        <section class="opt-section">
+          <h2 class="opt-title">Fonte</h2>
+          <div class="opt-rows">
+            <label class="opt-row">
+              <span class="opt-label">Família</span>
+              <select class="opt-input" id="fontFamily"></select>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Tamanho</span>
+              <span class="opt-range">
+                <input type="range" id="fontSize" min="8" max="32" step="1">
+                <output class="opt-value" id="fontSizeOut"></output>
+              </span>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Peso</span>
+              <select class="opt-input" id="fontWeight"></select>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Peso em negrito</span>
+              <select class="opt-input" id="fontWeightBold"></select>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Altura da linha</span>
+              <span class="opt-range">
+                <input type="range" id="lineHeight" min="0.8" max="2" step="0.05">
+                <output class="opt-value" id="lineHeightOut"></output>
+              </span>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Espaçamento</span>
+              <span class="opt-range">
+                <input type="range" id="letterSpacing" min="-1" max="5" step="0.5">
+                <output class="opt-value" id="letterSpacingOut"></output>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="opt-section">
+          <h2 class="opt-title">Cursor</h2>
+          <div class="opt-rows">
+            <div class="opt-row">
+              <span class="opt-label">Estilo</span>
+              <div class="segmented" id="cursorStyle" role="group"></div>
+            </div>
+
+            <label class="opt-row">
+              <span class="opt-label">Estilo inativo</span>
+              <select class="opt-input" id="cursorInactiveStyle"></select>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Largura</span>
+              <span class="opt-range">
+                <input type="range" id="cursorWidth" min="1" max="5" step="1">
+                <output class="opt-value" id="cursorWidthOut"></output>
+              </span>
+            </label>
+
+            <label class="opt-row opt-row-switch">
+              <span class="opt-label">Piscar</span>
+              <input type="checkbox" class="opt-switch" id="cursorBlink">
+            </label>
+          </div>
+        </section>
+
+        <section class="opt-section">
+          <h2 class="opt-title">Comportamento</h2>
+          <div class="opt-rows">
+            <label class="opt-row">
+              <span class="opt-label">Histórico (linhas)</span>
+              <input type="number" class="opt-input opt-input-num" id="scrollback"
+                     min="0" max="100000" step="100">
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Largura do tab</span>
+              <input type="number" class="opt-input opt-input-num" id="tabStopWidth"
+                     min="1" max="16" step="1">
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Sensibilidade da rolagem</span>
+              <span class="opt-range">
+                <input type="range" id="scrollSensitivity" min="0.5" max="5" step="0.5">
+                <output class="opt-value" id="scrollSensitivityOut"></output>
+              </span>
+            </label>
+
+            <label class="opt-row">
+              <span class="opt-label">Contraste mínimo</span>
+              <span class="opt-range">
+                <input type="range" id="minimumContrastRatio" min="1" max="21" step="0.5">
+                <output class="opt-value" id="minimumContrastRatioOut"></output>
+              </span>
+            </label>
+
+            <label class="opt-row opt-row-switch">
+              <span class="opt-label">Clique direito seleciona palavra</span>
+              <input type="checkbox" class="opt-switch" id="rightClickSelectsWord">
+            </label>
+
+            <label class="opt-row opt-row-switch">
+              <span class="opt-label">Negrito usa cores brilhantes</span>
+              <input type="checkbox" class="opt-switch" id="drawBoldTextInBrightColors">
+            </label>
+          </div>
+        </section>
+
+        <footer class="opt-footer">
+          <span class="opt-saved" id="optSaved"></span>
+          <button class="btn danger" id="btnResetOptions">Restaurar padrões</button>
+        </footer>
+
+      </div>
+    </main>
   </div>
 
   <!-- Confirmação da identidade do host no primeiro contato (trust on first use) -->
